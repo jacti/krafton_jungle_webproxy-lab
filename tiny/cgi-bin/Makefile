@@ -1,10 +1,22 @@
 CC = gcc
-CFLAGS = -O2 -Wall -I ..
+CFLAGS = -g -O0 -Wall -I ..
 
-all: adder
+# Output directory
+BINDIR = ../../out/bin/cgi-bin
+TARGET = $(BINDIR)/adder $(BINDIR)/player
 
-adder: adder.c
-	$(CC) $(CFLAGS) -o adder adder.c
+all: $(TARGET)
+
+# Create bin directory if needed
+$(BINDIR):
+	mkdir -p $@
+
+# Compile adder into BINDIR
+$(BINDIR)/adder: adder.c | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ adder.c
+
+$(BINDIR)/player: player.c | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ player.c
 
 clean:
-	rm -f adder *~
+	rm -f *~ $(TARGET)

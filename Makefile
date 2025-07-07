@@ -1,29 +1,37 @@
-# Makefile for Proxy Lab 
-#
-# You may modify this file any way you like (except for the handin
-# rule). You instructor will type "make" on your specific Makefile to
-# build your proxy from sources.
+# Makefile for Proxy Lab
 
 CC = gcc
 CFLAGS = -g -Wall
 LDFLAGS = -lpthread
 
-all: proxy
+# Output directories
+BINDIR = out/bin
+OBJDIR = out/obj
 
-csapp.o: csapp.c csapp.h
-	$(CC) $(CFLAGS) -c csapp.c
+# Object files
+OBJS = $(OBJDIR)/proxy.o $(OBJDIR)/csapp.o
 
-proxy.o: proxy.c csapp.h
-	$(CC) $(CFLAGS) -c proxy.c
+all: $(BINDIR)/proxy
 
-proxy: proxy.o csapp.o
-	$(CC) $(CFLAGS) proxy.o csapp.o -o proxy $(LDFLAGS)
+# Create output directories if they don't exist
+$(BINDIR) $(OBJDIR):
+	mkdir -p $@
 
-# Creates a tarball in ../proxylab-handin.tar that you can then
-# hand in. DO NOT MODIFY THIS!
+# Compile object files into OBJDIR
+$(OBJDIR)/csapp.o: csapp.c csapp.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -c csapp.c -o $@
+
+$(OBJDIR)/proxy.o: proxy.c csapp.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -c proxy.c -o $@
+
+# Link to create binary in BINDIR
+$(BINDIR)/proxy: $(OBJS) | $(BINDIR)
+	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+
+# Creates a tarball in ../proxylab-handin.tar (DO NOT MODIFY)
 handin:
 	(make clean; cd ..; tar cvf $(USER)-proxylab-handin.tar proxylab-handout --exclude tiny --exclude nop-server.py --exclude proxy --exclude driver.sh --exclude port-for-user.pl --exclude free-port.sh --exclude ".*")
 
 clean:
-	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz
-
+	rm -f *~ *.tar *.zip *.gzip *.bzip *.gz
+	rm -rf out

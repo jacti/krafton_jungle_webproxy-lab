@@ -1,22 +1,44 @@
 CC = gcc
-CFLAGS = -O2 -Wall -I .
+CFLAGS = -g -O0 -Wall -I .
 
-# This flag includes the Pthreads library on a Linux box.
-# Others systems will probably require something different.
 LIB = -lpthread
 
-all: tiny cgi
+# Output directories relative to this Makefile
+BINDIR = ../out/bin
+OBJDIR = ../out/obj
 
-tiny: tiny.c csapp.o
-	$(CC) $(CFLAGS) -o tiny tiny.c csapp.o $(LIB)
+all: $(BINDIR)/tiny cgi
 
-csapp.o: csapp.c
-	$(CC) $(CFLAGS) -c csapp.c
+# Create output directories if needed
+$(BINDIR) $(OBJDIR):
+	mkdir -p $@
 
+# Compile csapp.o into shared obj dir
+$(OBJDIR)/csapp.o: csapp.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c csapp.c -o $@
+
+# Build tiny using out/bin and out/obj
+$(BINDIR)/tiny: tiny.c $(OBJDIR)/csapp.o | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ tiny.c $(OBJDIR)/csapp.o $(LIB)
+
+# Run a binary from BINDIR with optional arguments
+run:
+	@if [ -z "$(prog)" ]; then \
+		echo "Usage: make run prog=target args='arguments'"; \
+		exit 1; \
+	fi; \
+	if [ ! -x $(BINDIR)/$(prog) ]; then \
+		echo "Error: $(BINDIR)/$(prog) not found or not executable"; \
+		exit 1; \
+	fi; \
+	echo "Running $(abspath $(BINDIR))/$(prog) $(args)"; \
+	cd .. && $(abspath $(BINDIR))/$(prog) $(args)
+
+# Build CGI programs
 cgi:
 	(cd cgi-bin; make)
 
 clean:
-	rm -f *.o tiny *~
+	rm -f *~ 
+	rm -f ../out/obj/csapp.o ../out/bin/tiny
 	(cd cgi-bin; make clean)
-
