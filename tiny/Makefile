@@ -6,6 +6,7 @@ LIB = -lpthread
 # Output directories relative to this Makefile
 BINDIR = ../out/bin
 OBJDIR = ../out/obj
+LIBDIR = ../include
 
 all: $(BINDIR)/tiny cgi
 
@@ -14,8 +15,8 @@ $(BINDIR) $(OBJDIR):
 	mkdir -p $@
 
 # Compile csapp.o into shared obj dir
-$(OBJDIR)/csapp.o: csapp.c | $(OBJDIR)
-	$(CC) $(CFLAGS) -c csapp.c -o $@
+$(OBJDIR)/csapp.o: $(LIBDIR)/csapp.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $(LIBDIR)/csapp.c -o $@
 
 # Build tiny using out/bin and out/obj
 $(BINDIR)/tiny: tiny.c $(OBJDIR)/csapp.o | $(BINDIR)
@@ -40,5 +41,5 @@ cgi:
 
 clean:
 	rm -f *~ 
-	rm -f ../out/obj/csapp.o ../out/bin/tiny
+	rm -f $(OBJDIR)/csapp.o $(BINDIR)/tiny
 	(cd cgi-bin; make clean)

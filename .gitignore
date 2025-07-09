@@ -91,3 +91,5 @@ Temporary Items
 # vscode setting
 .vscode/
 out/
+.proxy/
+.noproxy/

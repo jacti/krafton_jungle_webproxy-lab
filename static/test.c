@@ -33,8 +33,6 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    printf("Tiny Server Run!! \n");
-
     //signal 추가
     Signal(SIGCHLD, sigchild_handler);
     listenfd = Open_listenfd(argv[1]);
@@ -42,18 +40,16 @@ int main(int argc, char **argv)
     {
         clientlen = sizeof(clientaddr);
         connfd = Accept(listenfd, (SA *)&clientaddr,&clientlen); // line:netp:tiny:accept
-        Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
-        printf("Accepted connection from (%s, %s)\n", hostname, port);
-        pid_t pid;
-        if  ((pid = Fork()) == 0){
+        if  (Fork == 0){
             /* 1) 자식에서는 SIGCHLD를 기본 동작(=wait를 깨지 않고 블록시켜 주는)으로 복원 */
             Signal(SIGCHLD, SIG_DFL);
             Close(listenfd);
+            Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
+            printf("Accepted connection from (%s, %s)\n", hostname, port);
             doit(connfd);  // line:netp:tiny:doit
             Close(connfd); // line:netp:tiny:close
             exit(0);
         }
-        printf("Create child pid : %d\n", (int)pid);
         Close(connfd); // line:netp:tiny:close
     }
 }
@@ -298,7 +294,7 @@ void clienterror(int fd, char *cause, char *errnum,
 void sigchild_handler(int sig)
 {
     pid_t i;
-    while((i = waitpid(-1, 0, WNOHANG)) > 0){
+    while((i = waitpid(-1, 0, WNOHANG) )> 0){
         sio_puts("Child (pid :");
         sio_putl((long)i);
         sio_puts(") finish\n");

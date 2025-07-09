@@ -2,7 +2,7 @@
  * adder.c - a minimal CGI program that adds two numbers together
  */
 /* $begin adder */
-#include "csapp.h"
+#include "../../include/csapp.h"
 
 int main(void)
 {
@@ -22,6 +22,11 @@ int main(void)
         n2 = atoi(arg2);
         *p = '&';
     }
+    // //일부러 무한루프
+    // while(1){
+    //     int a = 10;
+    //     a+1;
+    // }
 
     //  STEP 3: response 생성
     sprintf(content, "QUERY_STRING=%s\r\n<p>", buf);
