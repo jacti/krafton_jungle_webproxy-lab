@@ -8,7 +8,7 @@ int main(int argc, char **argv)
     char hostname[MAXLINE], port[MAXLINE], *proxyport;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
-    cache_list_t cache_list;
+    cache_list_t cache_list = {.head = NULL, .len=0, .new_ticket=0};
 
     //  Signal 추가
     Signal(SIGPIPE, SIG_IGN);
@@ -53,20 +53,23 @@ void connect_node(cache_node_t *prev, cache_node_t *next){
     }
 }
 
+void refresh_ticket(cache_list_t *cache_list){
+    size_t new_ticket = 0;
+    cache_node_t *node = cache_list->head;
+    while(node){
+        node->ticket = new_ticket++;
+        node = node->next;
+    }
+    cache_list->new_ticket = new_ticket;
+}
+
 cache_node_t *find_cache(cache_list_t* cache_list, char *request_header)
 {
     cache_node_t* node = cache_list->head;
     while(node !=NULL){
         if(!strcmp(request_header,node->request_header)){
-            //  CASE 1 : node가 head가 아니면 새 head로 만듦 (LRU)
-            if(cache_list->head != node){
-                // STEP 1 : 이전 노드랑 다음 노드를 연결
-                connect_node(node->prev,node->next);
-                // STEP 2 : head에 등록
-                node->prev = NULL;
-                connect_node(node,cache_list->head);
-                cache_list->head = node;
-            }
+            //사용되니까 ticket의 값을 높여줌
+            node->ticket = cache_list->new_ticket++;
             return node;
         }
         node = node->next;
@@ -77,18 +80,28 @@ cache_node_t *find_cache(cache_list_t* cache_list, char *request_header)
 cache_node_t *caching(cache_list_t *cache_list, cache_node_t* new_node)
 {
     if(cache_list->len == MAX_LIST_LEN){
-        cache_node_t *free_node = cache_list->tail;
-        cache_list->tail = cache_list->tail->prev;
+        cache_node_t *free_node = cache_list->head;
+        cache_node_t *cur = free_node->next;
+        while(cur){
+            if(free_node->ticket < cur->ticket){
+                free_node = cur;
+            }
+        }
+        connect_node(free_node->prev, free_node->next);
+        if(cache_list->head == free_node){
+            cache_list->head = free_node->next;
+        }
         free(free_node);
         cache_list->len--;
     }
     new_node->prev = NULL;
+    new_node->ticket = cache_list->new_ticket++;
     connect_node(new_node, cache_list->head);
-    if(new_node->next == NULL){
-        cache_list->tail = new_node;
-    }
     cache_list->head = new_node;
     cache_list->len ++;
+    if(cache_list->new_ticket == MAX_TICKET){
+        refresh_ticket(cache_list);
+    }
 }
 
 void run_proxy(int client_fd, cache_list_t *cache_list)

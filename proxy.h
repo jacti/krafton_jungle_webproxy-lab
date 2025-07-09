@@ -6,6 +6,7 @@
 #define MAX_OBJECT_SIZE 102400
 
 #define MAX_LIST_LEN ((size_t)(MAX_CACHE_SIZE / MAX_OBJECT_SIZE))
+#define MAX_TICKET 100
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr =
@@ -19,6 +20,7 @@ _cache_node{
     size_t response_size;
     char cached_response[MAX_OBJECT_SIZE];
 
+    size_t ticket;
     struct _cache_node* prev;
     struct _cache_node* next;
 
@@ -26,8 +28,8 @@ _cache_node{
 
 typedef struct{
     cache_node_t *head;
-    cache_node_t *tail;
     size_t len;
+    size_t new_ticket;
 } cache_list_t;
 
 cache_node_t *find_cache(cache_list_t*, char *);
@@ -36,3 +38,4 @@ cache_node_t *caching(cache_list_t *cache_list, cache_node_t* new_node);
 void run_proxy(int, cache_list_t*);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 void read_requesthdrs(rio_t *rp);
+void refresh_ticket(cache_list_t *cache_list);
