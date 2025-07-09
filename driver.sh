@@ -388,13 +388,13 @@ download_proxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH
 
 # See if the proxy fetch succeeded by comparing it with the original
 # file in the tiny directory
-diff -q ${FETCH_FILE} ${NOPROXY_DIR}/${FETCH_FILE}  &> /dev/null
+diff -q ${STATIC_DIR}/${FETCH_FILE} ${NOPROXY_DIR}/${FETCH_FILE}  &> /dev/null
 if [ $? -eq 0 ]; then
     cacheScore=${MAX_CACHE}
-    echo "Success: Was able to fetch tiny/${FETCH_FILE} from the cache."
+    echo "Success: Was able to fetch ${STATIC_DIR}/${FETCH_FILE} from the cache."
 else
     cacheScore=0
-    echo "Failure: Was not able to fetch tiny/${FETCH_FILE} from the proxy cache."
+    echo "Failure: Was not able to fetch ${STATIC_DIR}/${FETCH_FILE} from the proxy cache."
 fi
 
 # Kill the proxy

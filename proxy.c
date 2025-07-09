@@ -1,6 +1,6 @@
 #include "proxy.h"
 
-#define USECACHE 0
+#define USECACHE 1
         
 int main(int argc, char **argv)
 {
@@ -9,6 +9,9 @@ int main(int argc, char **argv)
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
     cache_list_t cache_list;
+
+    //  Signal 추가
+    Signal(SIGPIPE, SIG_IGN);
 
     /* Check command line args */
     if (argc != 2)
@@ -50,11 +53,11 @@ void connect_node(cache_node_t *prev, cache_node_t *next){
     }
 }
 
-cache_node_t *find_cache(cache_list_t* cache_list, char *method, char *uri, char *version)
+cache_node_t *find_cache(cache_list_t* cache_list, char *request_header)
 {
     cache_node_t* node = cache_list->head;
     while(node !=NULL){
-        if(!strcmp(method,node->method) && !strcmp(uri,node->uri) && !strcmp(version, node->version)){
+        if(!strcmp(request_header,node->request_header)){
             //  CASE 1 : node가 head가 아니면 새 head로 만듦 (LRU)
             if(cache_list->head != node){
                 // STEP 1 : 이전 노드랑 다음 노드를 연결
@@ -66,6 +69,7 @@ cache_node_t *find_cache(cache_list_t* cache_list, char *method, char *uri, char
             }
             return node;
         }
+        node = node->next;
     }
     return NULL;
 }
@@ -107,15 +111,6 @@ void run_proxy(int client_fd, cache_list_t *cache_list)
         return;
     }
 
-    cache_node_t *node;
-    if(USECACHE){
-        // cache 구조체 생성 및 저장
-        node= calloc(1,sizeof(cache_node_t));
-        strcpy(node->method,method);
-        strcpy(node->uri,uri);
-        strcpy(node->version,version);
-    }
-
     //  STEP 2 : uri parse
     char hostname[MAXLINE], port[MAX_INPUT], path[MAXLINE];
     char *p = strchr((uri+5), ':');
@@ -127,10 +122,17 @@ void run_proxy(int client_fd, cache_list_t *cache_list)
     strcpy(path,p+1);
 
     sprintf(request_buf,"%s /%s %s\r\n", method, path, "HTTP/1.0");
+    cache_node_t *node;
+    if(USECACHE){
+        // cache 구조체 생성 및 저장
+        node= calloc(1,sizeof(cache_node_t));
+        strcpy(node->request_header,request_buf);
+    }
+
     cache_node_t *cached_node;
     // cache 찾아서 보내기
-    if(USECACHE && (cached_node = find_cache(cache_list,node->method,node->uri,node->version))){
-        rio_writen(client_fd,cached_node->cached_response,cached_node->response_size);
+    if(USECACHE && (cached_node = find_cache(cache_list,node->request_header))){
+        rio_writen(client_fd, cached_node->cached_response, cached_node->response_size);
         free(node);
     }
     else    //cache 되어있지 않으면 서버에 연결 요청

@@ -14,14 +14,8 @@ static const char *user_agent_hdr =
 
 typedef struct
 _cache_node{
-    union{
-        char* key;
-        struct{
-            char method[MAX_INPUT];
-            char uri[MAXLINE];
-            char version[MAX_INPUT];
-        };
-    };
+    //key
+    char request_header[MAXLINE];
     size_t response_size;
     char cached_response[MAX_OBJECT_SIZE];
 
@@ -36,7 +30,7 @@ typedef struct{
     size_t len;
 } cache_list_t;
 
-cache_node_t * find_cache(cache_list_t* cache_list, char *method, char *uri, char* version);
+cache_node_t *find_cache(cache_list_t*, char *);
 cache_node_t *caching(cache_list_t *cache_list, cache_node_t* new_node);
 
 void run_proxy(int, cache_list_t*);

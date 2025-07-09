@@ -37,6 +37,8 @@ int main(int argc, char **argv)
 
     //signal 추가
     Signal(SIGCHLD, sigchild_handler);
+    Signal(SIGPIPE, SIG_IGN);
+    
     listenfd = Open_listenfd(argv[1]);
     while (1)
     {
