@@ -1,22 +1,16 @@
 #include "proxy.h"
 
-#define USECACHE 0
+#define USECACHE 1
 
-typedef struct
-{
-    int connfd;
-    cache_list_t *cache_list;
-} arg_t;
+cache_list_t global_cache_list = {.head = NULL, .len = 0, .new_ticket = 0, .victim = NULL};
 
 int main(int argc, char **argv)
 {
-    int listenfd;
+    int listenfd, *confdp;
     char hostname[MAXLINE], port[MAXLINE], *proxyport;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
-    cache_list_t cache_list = {.head = NULL, .len = 0, .new_ticket = 0};
     pthread_t tid;
-    arg_t *argp;
 
     //  Signal 추가
     Signal(SIGPIPE, SIG_IGN);
@@ -33,13 +27,12 @@ int main(int argc, char **argv)
     while (1)
     {
         clientlen = sizeof(clientaddr);
-        argp = malloc(sizeof(arg_t));
-        argp->connfd = accept(listenfd, (SA *)&clientaddr, &clientlen);
-        argp->cache_list = &cache_list;
+        confdp = malloc(sizeof(int));
+        *confdp = accept(listenfd, (SA *)&clientaddr, &clientlen);
         getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
         printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-        pthread_create(&tid, NULL, thread, argp);
+        pthread_create(&tid, NULL, thread, confdp);
     }
 
     return 0;
@@ -48,23 +41,19 @@ int main(int argc, char **argv)
 // Thread routine
 void *thread(void *vargp)
 {
-    arg_t arg = *((arg_t *)vargp);
-    int connfd = arg.connfd;
-    cache_list_t *cache_list = arg.cache_list;
+    int connfd = *((int *)vargp);
     pthread_detach(pthread_self());
     free(vargp);
     printf("Thread(%d) start\n", (int)pthread_self());
-    run_proxy(connfd, cache_list);
+    run_proxy(connfd, &global_cache_list);
     close(connfd);
     return NULL;
 }
 
-//write 하는 함수
+// write 하는 함수
 void connect_node(cache_node_t *prev, cache_node_t *next)
 {
-    read_start(prev);
-    read_start(next);
-
+    pthread_rwlock_rdlock(&global_cache_list.rwlock);
     if (!prev && !next)
         return;
     else if (!prev)
@@ -84,78 +73,73 @@ void connect_node(cache_node_t *prev, cache_node_t *next)
         return;
     }
 
-    read_end(prev);
-    read_end(next);
+    pthread_rwlock_unlock(&global_cache_list.rwlock);
 }
 
 void refresh_ticket(cache_list_t *cache_list)
 {
+    pthread_rwlock_wrlock(&cache_list->rwlock);
     size_t new_ticket = 0;
     cache_node_t *node = cache_list->head;
     while (node)
     {
-        read_start(node);
         node->ticket = new_ticket++;
         node = node->next;
-        read_end(node);
     }
     cache_list->new_ticket = new_ticket;
+    pthread_rwlock_unlock(&cache_list->rwlock);
 }
 
 cache_node_t *find_cache(cache_list_t *cache_list, char *request_header)
 {
     cache_node_t *node = cache_list->head;
     cache_node_t *victim = node;
+    pthread_rwlock_rdlock(&cache_list->rwlock);
     while (node != NULL)
     {
-        read_start(node);
         if (!strcmp(request_header, node->request_header))
         {
             // 사용되니까 ticket의 값을 높여줌
             node->ticket = cache_list->new_ticket++;
             return node;
         }
-        if(victim->ticket > node->ticket){
-            victim= node;
+        if (victim->ticket > node->ticket)
+        {
+            victim = node;
         }
         node = node->next;
-        read_end(node);
     }
     cache_list->victim = victim;
+    pthread_rwlock_unlock(&cache_list->rwlock);
     return NULL;
 }
 
 cache_node_t *caching(cache_list_t *cache_list, cache_node_t *new_node)
 {
+    pthread_rwlock_wrlock(&cache_list->rwlock);
     if (cache_list->len == MAX_LIST_LEN)
     {
         cache_node_t *free_node = cache_list->victim;
-        if(!free_node){
+        if (!free_node)
+        {
             free_node = cache_list->head;
         }
-        read_start(free_node);
         connect_node(free_node->prev, free_node->next);
         if (cache_list->head == free_node)
         {
             cache_list->head = free_node->next;
         }
-        read_end(free_node);
-        write_start(free_node);
         free(free_node);
-        write_end(free_node);
     }
     new_node->prev = NULL;
-    sem_init(&(new_node->mutext),0, 1);
-    sem_init(&(new_node->w),0, 1);
     new_node->ticket = cache_list->new_ticket++;
     connect_node(new_node, cache_list->head);
     cache_list->head = new_node;
-    if(cache_list->len < MAX_LIST_LEN){
-        while(cache_list->lock);
-        cache_list->lock = 1;
+    if (cache_list->len < MAX_LIST_LEN)
+    {
         cache_list->len++;
-        cache_list->lock = 0;
     }
+    pthread_rwlock_unlock(&cache_list->rwlock);
     if (cache_list->new_ticket == MAX_TICKET)
     {
         refresh_ticket(cache_list);
@@ -205,10 +189,10 @@ void run_proxy(int client_fd, cache_list_t *cache_list)
     // cache 찾아서 보내기
     if (USECACHE && (cached_node = find_cache(cache_list, node->request_header)))
     {
-        read_start(cached_node);
+        pthread_rwlock_rdlock(&cache_list->rwlock);
         rio_writen(client_fd, cached_node->cached_response, cached_node->response_size);
-        read_end(cached_node);
         free(node);
+        pthread_rwlock_unlock(&cache_list->rwlock);
     }
     else // cache 되어있지 않으면 서버에 연결 요청
     {    //  STEP 3 : server 연결
@@ -331,33 +315,3 @@ void read_requesthdrs(rio_t *rp)
     return;
 }
 /* $end read_requesthdrs */
-
-
-void read_start(cache_node_t *node){
-    // 읽기 끼리 공유하는 것 수정
-    sem_wait(&(node->mutext));
-        node->readcnt++;
-        if(node->readcnt == 1){
-            // 처음 읽기 시작하면 쓰지 못하도록 락
-            sem_wait(&(node->w));
-        }
-    sem_post(&(node->mutext));
-    //여기서 부터 읽기
-}
-void read_end(cache_node_t *node){
-    // 읽기 끼리 공유하는 것 수정
-    sem_wait(&(node->mutext));
-        node->readcnt--;
-        if(node->readcnt == 0){
-            // 읽는 사람이 없으면 쓰기 락 해제
-            sem_post(&(node->w));
-        }
-    sem_post(&(node->mutext));
-}
-
-extern inline void write_start(cache_node_t *node){
-    sem_wait(&(node->w));
-}
-extern inline void write_end(cache_node_t *node){
-    sem_post(&(node->w));
-}

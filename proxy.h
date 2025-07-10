@@ -24,9 +24,6 @@ _cache_node{
     struct _cache_node* prev;
     struct _cache_node* next;
 
-    int readcnt;
-    sem_t mutext, w;
-
 } cache_node_t;
 
 typedef struct{
@@ -34,7 +31,7 @@ typedef struct{
     size_t len;
     size_t new_ticket;
     cache_node_t *victim;
-    int lock;
+    pthread_rwlock_t rwlock;
 } cache_list_t;
 
 cache_node_t *find_cache(cache_list_t*, char *);
@@ -45,7 +42,3 @@ void run_proxy(int, cache_list_t*);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 void read_requesthdrs(rio_t *rp);
 void refresh_ticket(cache_list_t *cache_list);
-void read_start(cache_node_t *);
-void read_end(cache_node_t *);
-inline void write_start(cache_node_t *node);
-inline void write_end(cache_node_t *node);
